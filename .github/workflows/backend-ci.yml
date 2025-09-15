@@ -1,0 +1,42 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20          # 或改成 lts/*，或搭配 node-version-file: .nvmrc
+          check-latest: true        # 可選：拿到該大版本的最新 patch
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build (if present)
+        run: npm run -s build --if-present
+
+      - name: Smoke test (optional)
+        run: |
+          if [ -f index.js ]; then
+            node -e "require('./index.js'); console.log('smoke ok')"
+          else
+            echo "No index.js; skipping"
+          fi
