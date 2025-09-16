@@ -10,7 +10,7 @@ on:
     branches:
       - main
       - develop
-      - feature/*
+      - feature/**
 
 jobs:
   build:
