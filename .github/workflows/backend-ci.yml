@@ -2,9 +2,15 @@ name: Backend CI
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - develop
+      - feature/**
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - develop
+      - feature/*
 
 jobs:
   build:
@@ -17,8 +23,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20          # 或改成 lts/*，或搭配 node-version-file: .nvmrc
-          check-latest: true        # 可選：拿到該大版本的最新 patch
+          node-version: 20
+          check-latest: true
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -30,13 +36,18 @@ jobs:
             npm install
           fi
 
-      - name: Build (if present)
+      - name: Build
         run: npm run -s build --if-present
 
-      - name: Smoke test (optional)
+      - name: Smoke test
+        env:
+          PORT: 3000
         run: |
-          if [ -f index.js ]; then
-            node -e "require('./index.js'); console.log('smoke ok')"
-          else
-            echo "No index.js; skipping"
-          fi
+          node index.js &
+          SERVER_PID=$!
+          for i in {1..30}; do
+            curl -fsS http://localhost:$PORT/health && break
+            sleep 1
+          done
+          curl -fsS http://localhost:$PORT/health | grep '"ok": true'
+          kill $SERVER_PID
