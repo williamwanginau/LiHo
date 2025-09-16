@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import "./App.css";
 import { io } from "socket.io-client";
 import users from "./users";
@@ -26,12 +26,38 @@ export default function App() {
   }, []);
   const [userExternalId, setUserExternalId] = useState(initialExternalId);
 
+  // Minimal event console states
+  const [text, setText] = useState("");
+  const [logs, setLogs] = useState([]);
+  const pushLog = useCallback((event, data) => {
+    setLogs((prev) => [...prev, { ts: Date.now(), event, data }]);
+  }, []);
+
   const me = useMemo(() => {
     return (
       users.find((u) => String(u.external_id) === String(userExternalId)) ||
       users[0]
     );
   }, [userExternalId]);
+
+  const sendMessage = useCallback(
+    (body) => {
+      const trimmed = (body ?? text).trim();
+      if (!trimmed || !socket.connected) return;
+      const tempId = crypto?.randomUUID?.() || String(Date.now());
+      const payload = { text: trimmed, clientId: me?.external_id, tempId };
+      pushLog("emit:message:send", [payload]);
+      try {
+        socket.emit("message:send", payload, (ack) => {
+          pushLog("ack:message:send", [ack]);
+        });
+      } catch (err) {
+        pushLog("ack:error", [String(err)]);
+      }
+      setText("");
+    },
+    [me?.external_id, pushLog, text]
+  );
 
   useEffect(() => {
     if (!socket.connected) socket.connect();
@@ -53,6 +79,15 @@ export default function App() {
       socket.off("connect_error", onError);
     };
   }, []);
+
+  // Log all incoming events (including custom ack events if server emits them)
+  useEffect(() => {
+    const onAny = (event, ...args) => pushLog(event, args);
+    socket.onAny(onAny);
+    return () => {
+      socket.offAny(onAny);
+    };
+  }, [pushLog]);
 
   useEffect(() => {
     try {
@@ -131,6 +166,47 @@ export default function App() {
             {prettyStatus}
           </span>
         </header>
+
+        {/* Send box */}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            marginBottom: 12,
+            alignItems: "center",
+          }}
+        >
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                sendMessage(text);
+              }
+            }}
+            placeholder="Type message and press Enter"
+            style={{
+              flex: 1,
+              padding: 10,
+              borderRadius: 10,
+              border: "1px solid #d1d5db",
+              background: "#ffffff",
+              color: "#111827",
+            }}
+          />
+          <button
+            onClick={() => sendMessage(text)}
+            disabled={!socket.connected || !text.trim()}
+            style={{ padding: "10px 14px" }}
+            title={!socket.connected ? "Socket disconnected" : "Send"}
+          >
+            🚀 Send
+          </button>
+          <button onClick={() => setLogs([])} style={{ padding: "10px 12px" }}>
+            🧹 Clear
+          </button>
+        </div>
 
         <p
           style={{
@@ -238,6 +314,52 @@ export default function App() {
           >
             {me?.external_id}
           </code>
+        </div>
+
+        {/* Live event console */}
+        <div
+          style={{
+            marginTop: 12,
+            border: "1px solid #e5e7eb",
+            background: "#f9fafb",
+            borderRadius: 10,
+            padding: 8,
+            height: 240,
+            overflow: "auto",
+            textAlign: "left",
+          }}
+        >
+          {logs.length === 0 ? (
+            <div style={{ color: "#6b7280", fontSize: 13 }}>
+              No events yet. Try sending a message.
+            </div>
+          ) : (
+            logs.map((row, i) => (
+              <div key={i} style={{ marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>
+                  {new Date(row.ts).toLocaleTimeString()} — {row.event}
+                </div>
+                <pre
+                  style={{
+                    margin: 0,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    fontSize: 12,
+                  }}
+                >
+                  {row.data
+                    .map((d) => {
+                      try {
+                        return JSON.stringify(d, null, 2);
+                      } catch {
+                        return String(d);
+                      }
+                    })
+                    .join("\n")}
+                </pre>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
