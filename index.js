@@ -6,6 +6,7 @@ const server = http.createServer(app);
 const PORT = Number(process.env.PORT) || 3000;
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || "http://localhost:5173";
 const cors = require("cors");
+const crypto = require("crypto");
 
 const corsOptions = {
   origin: ALLOWED_ORIGINS,
@@ -30,6 +31,19 @@ io.on("connection", (socket) => {
   console.log("socket connected:", socket.id);
   socket.on("disconnect", () => {
     console.log("socket disconnected:", socket.id);
+  });
+
+  socket.on("message:send", (message, ack) => {
+    console.log("message received:", message);
+    ack({
+      ok: true,
+      message: {
+        id: crypto.randomUUID(),
+        text: message.text,
+        senderId: message.clientId,
+        serverTime: new Date(),
+      },
+    });
   });
 });
 
