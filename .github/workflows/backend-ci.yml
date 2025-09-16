@@ -10,7 +10,7 @@ on:
     branches:
       - main
       - develop
-      - feature/*
+      - feature/**
 
 jobs:
   build:
@@ -40,14 +40,20 @@ jobs:
         run: npm run -s build --if-present
 
       - name: Smoke test
+        shell: bash
         env:
           PORT: 3000
         run: |
+          set -euo pipefail
           node index.js &
           SERVER_PID=$!
+          trap "kill $SERVER_PID" EXIT
+
           for i in {1..30}; do
-            curl -fsS http://localhost:$PORT/health && break
+            if curl -fsS "http://localhost:${PORT}/health" >/dev/null; then
+              break
+            fi
             sleep 1
           done
-          curl -fsS http://localhost:$PORT/health | grep '"ok": true'
-          kill $SERVER_PID
+
+          curl -fsS "http://localhost:${PORT}/health" | grep -E '"ok":[[:space:]]*true'
