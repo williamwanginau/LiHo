@@ -33,15 +33,35 @@ io.on("connection", (socket) => {
     console.log("socket disconnected:", socket.id);
   });
 
+  socket.on("user:identify", (user, ack) => {
+    socket.data.userId = user.id;
+    ack({
+      id: user.id,
+      ok: true,
+      user: user,
+    });
+  });
+
   socket.on("message:send", (message, ack) => {
-    console.log("message received:", message);
+    console.log(socket.data);
+    const senderId = socket.data.userId;
+    if (!senderId) {
+      ack({
+        ok: false,
+        error: "User not identified",
+      });
+      return;
+    }
+
     ack({
       ok: true,
       message: {
         id: crypto.randomUUID(),
+        roomId: message.roomId,
+        senderId: senderId,
+        clientTempId: message.clientTempId,
         text: message.text,
-        senderId: message.clientId,
-        serverTime: new Date(),
+        createdAt: new Date(),
       },
     });
   });
