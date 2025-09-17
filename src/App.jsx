@@ -1,16 +1,15 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import "./App.css";
 import { io } from "socket.io-client";
 import users from "./users";
 import rooms from "./rooms";
 
+// Socket.IO client
 const WS_URL = import.meta.env.VITE_WS_URL || "http://localhost:3000";
-
 const socket = io(WS_URL, { transports: ["websocket"], autoConnect: false });
 
 export default function App() {
   const [isConnected, setIsConnected] = useState(socket.connected);
-  const prevRoomIdRef = useRef;
   const [status, setStatus] = useState("connecting");
   const STORAGE_KEY = "chatUserExternalId";
   const ROOM_STORAGE_KEY = "chatRoomId";
@@ -46,19 +45,10 @@ export default function App() {
   const joinRoom = useCallback(() => {
     socket.emit("join:room", { roomId }, (res) => {
       if (res?.ok) {
-        console.log("join room success", res.roomId);
-        prevRoomIdRef.current = roomId;
+        console.log("join room success");
       } else {
         console.error("join room failed", res?.error);
       }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId]);
-
-  const leaveRoom = useCallback(() => {
-    socket.emit("leave:room", { roomId }, (res) => {
-      if (res?.ok) console.log("leave room success", res.roomId);
-      else console.error("leave room failed", res?.error);
     });
   }, [roomId]);
 
@@ -78,37 +68,35 @@ export default function App() {
     );
   }, [userExternalId]);
 
-  const sendMessage = useCallback(
-    (body) => {
-      const trimmed = (body ?? text).trim();
-      if (!trimmed || !socket.connected) return;
-      const tempId = crypto?.randomUUID?.() || String(Date.now());
-      const payload = {
-        clientTempId: tempId,
-        text: trimmed,
-        roomId,
-      };
+  const sendMessage = useCallback(() => {
+    const trimmed = text.trim();
+    if (!trimmed || !socket.connected) return;
+    const tempId = crypto?.randomUUID?.() || String(Date.now());
+    const payload = {
+      clientTempId: tempId,
+      text: trimmed,
+      roomId,
+    };
 
-      pushLog("emit:message:send", [payload]);
-      try {
-        socket.emit("message:send", payload, (ack) => {
-          pushLog("message:send:ack", [ack]);
-          try {
-            if (ack && ack.ok && ack.message) {
-              const norm = normalizeMessage(ack.message);
-              setMessages((prev) => [...prev, norm]);
-            }
-          } catch {
-            /* empty */
+    pushLog("emit:message:send", [payload]);
+    try {
+      socket.emit("message:send", payload, (ack) => {
+        pushLog("message:send:ack", [ack]);
+        try {
+          const ackMsg = ack?.message ?? ack?.data?.message;
+          if (ack?.ok && ackMsg) {
+            const norm = normalizeMessage(ackMsg, roomId);
+            setMessages((prev) => [...prev, norm]);
           }
-        });
-      } catch (err) {
-        pushLog("ack:error", [String(err)]);
-      }
-      setText("");
-    },
-    [me?.external_id, roomId, pushLog, text]
-  );
+        } catch {
+          /* empty */
+        }
+      });
+    } catch (err) {
+      pushLog("ack:error", [String(err)]);
+    }
+    setText("");
+  }, [me?.external_id, roomId, pushLog, text]);
 
   useEffect(() => {
     if (!socket.connected) socket.connect();
@@ -117,11 +105,7 @@ export default function App() {
       setIsConnected(true);
       socket.emit(
         "user:identify",
-        {
-          id: me?.id,
-          externalId: userExternalId,
-          nickname: me?.name,
-        },
+        { id: me?.id, externalId: userExternalId, nickname: me?.name },
         (res) => {
           if (res?.ok) {
             console.log("identify success", res.user);
@@ -133,7 +117,10 @@ export default function App() {
 
       setStatus(`connected (${socket.id})`);
     };
-    const onDisconnect = () => setStatus("disconnected");
+    const onDisconnect = () => {
+      setStatus("disconnected");
+      setIsConnected(false);
+    };
     const onError = (err) => {
       console.error("connect_error", err);
       setStatus("connect_error");
@@ -160,14 +147,11 @@ export default function App() {
     };
   }, [pushLog]);
 
+  // Join selected room when connected or when room changes
   useEffect(() => {
     if (!isConnected || !roomId) return;
-
-    const prev = prevRoomIdRef.current;
-    if (prev && prev !== roomId) leaveRoom(prev);
-
-    joinRoom(roomId);
-  }, [roomId, isConnected]);
+    joinRoom();
+  }, [roomId, isConnected, joinRoom]);
 
   // Normalize various server message shapes to a single shape
   const normalizeMessage = useCallback(
@@ -196,20 +180,59 @@ export default function App() {
     [roomId]
   );
 
+  // Load history when switching rooms
+  useEffect(() => {
+    if (!roomId) return;
+    setMessages([]);
+    const controller = new AbortController();
+    const load = async () => {
+      try {
+        const base = WS_URL.replace(/\/$/, "");
+        const url = `${base}/messages?roomId=${encodeURIComponent(roomId)}&limit=50`;
+        const res = await fetch(url, { signal: controller.signal, credentials: "include" });
+        if (!res.ok) {
+          pushLog("history:error", [res.status, res.statusText]);
+          return;
+        }
+        const data = await res.json();
+        const list = Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data?.messages)
+          ? data.messages
+          : Array.isArray(data?.data)
+          ? data.data
+          : [];
+        const normalized = list.map((m) => normalizeMessage(m, roomId));
+        setMessages(normalized);
+        pushLog("history:loaded", [{ count: normalized.length }]);
+      } catch (err) {
+        if (err?.name !== "AbortError") {
+          pushLog("history:error", [String(err)]);
+        }
+      }
+    };
+    load();
+    return () => controller.abort();
+  }, [roomId, normalizeMessage, pushLog]);
+
+  // (duplicate join + normalize removed after refactor)
+
   // Listen for message:new to update chat transcript
   useEffect(() => {
     const onNew = (msg) => {
       pushLog("message:new", [msg]);
       try {
         const norm = normalizeMessage(msg);
-        setMessages((prev) => [...prev, norm]);
+        if (!norm.room_id || String(norm.room_id) === String(roomId)) {
+          setMessages((prev) => [...prev, norm]);
+        }
       } catch {
         /* empty */
       }
     };
     socket.on("message:new", onNew);
     return () => socket.off("message:new", onNew);
-  }, [pushLog, normalizeMessage]);
+  }, [pushLog, normalizeMessage, roomId]);
 
   useEffect(() => {
     try {
@@ -331,7 +354,7 @@ export default function App() {
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
-                sendMessage(text);
+                sendMessage();
               }
             }}
             placeholder="Type message and press Enter"
@@ -345,7 +368,7 @@ export default function App() {
             }}
           />
           <button
-            onClick={() => sendMessage(text)}
+            onClick={() => sendMessage()}
             disabled={!socket.connected || !text.trim()}
             style={{ padding: "10px 14px" }}
             title={!socket.connected ? "Socket disconnected" : "Send"}
@@ -541,8 +564,22 @@ export default function App() {
                 style={{ marginBottom: 8 }}
               >
                 <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  {new Date(m.serverTimeMs || Date.now()).toLocaleTimeString()}{" "}
-                  — {m.senderId === me?.external_id ? "You" : m.senderId}
+                  {new Date(m.serverTimeMs || Date.now()).toLocaleTimeString()} {" "}
+                  {(() => {
+                    const isSelf =
+                      String(m?.senderId ?? "") === String(me?.external_id ?? "") ||
+                      String(m?.senderId ?? "") === String(me?.id ?? "");
+                    const sender = users.find(
+                      (u) =>
+                        String(u.external_id) === String(m?.senderId ?? "") ||
+                        String(u.id) === String(m?.senderId ?? "")
+                    );
+                    const nickname = isSelf ? me?.name : sender?.name;
+                    const idLabel = isSelf
+                      ? String(me?.external_id ?? me?.id ?? "")
+                      : String(sender?.external_id ?? sender?.id ?? m?.senderId ?? "");
+                    return `${nickname || "Unknown"}(${idLabel})`;
+                  })()}
                 </div>
                 <div
                   style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
