@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import "./App.css";
 import { io } from "socket.io-client";
 import users from "./users";
@@ -9,6 +9,8 @@ const WS_URL = import.meta.env.VITE_WS_URL || "http://localhost:3000";
 const socket = io(WS_URL, { transports: ["websocket"], autoConnect: false });
 
 export default function App() {
+  const [isConnected, setIsConnected] = useState(socket.connected);
+  const prevRoomIdRef = useRef;
   const [status, setStatus] = useState("connecting");
   const STORAGE_KEY = "chatUserExternalId";
   const ROOM_STORAGE_KEY = "chatRoomId";
@@ -41,9 +43,30 @@ export default function App() {
   }, []);
   const [roomId, setRoomId] = useState(initialRoomId);
 
+  const joinRoom = useCallback(() => {
+    socket.emit("join:room", { roomId }, (res) => {
+      if (res?.ok) {
+        console.log("join room success", res.roomId);
+        prevRoomIdRef.current = roomId;
+      } else {
+        console.error("join room failed", res?.error);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId]);
+
+  const leaveRoom = useCallback(() => {
+    socket.emit("leave:room", { roomId }, (res) => {
+      if (res?.ok) console.log("leave room success", res.roomId);
+      else console.error("leave room failed", res?.error);
+    });
+  }, [roomId]);
+
   // Minimal event console states
   const [text, setText] = useState("");
   const [logs, setLogs] = useState([]);
+  const [showLog, setShowLog] = useState(false);
+  const [messages, setMessages] = useState([]);
   const pushLog = useCallback((event, data) => {
     setLogs((prev) => [...prev, { ts: Date.now(), event, data }]);
   }, []);
@@ -60,17 +83,28 @@ export default function App() {
       const trimmed = (body ?? text).trim();
       if (!trimmed || !socket.connected) return;
       const tempId = crypto?.randomUUID?.() || String(Date.now());
-
       const payload = {
         text: trimmed,
-        roomId: roomId,
+        clientId: me?.external_id,
+        tempId,
         clientTempId: tempId,
+        roomId,
+        room_id: roomId,
+        client_temp_id: tempId,
       };
 
       pushLog("emit:message:send", [payload]);
       try {
         socket.emit("message:send", payload, (ack) => {
           pushLog("ack:message:send", [ack]);
+          try {
+            if (ack && ack.ok && ack.message) {
+              const norm = normalizeMessage(ack.message);
+              setMessages((prev) => [...prev, norm]);
+            }
+          } catch {
+            /* empty */
+          }
         });
       } catch (err) {
         pushLog("ack:error", [String(err)]);
@@ -84,6 +118,7 @@ export default function App() {
     if (!socket.connected) socket.connect();
 
     const onConnect = () => {
+      setIsConnected(true);
       socket.emit(
         "user:identify",
         {
@@ -106,6 +141,7 @@ export default function App() {
     const onError = (err) => {
       console.error("connect_error", err);
       setStatus("connect_error");
+      setIsConnected(false);
     };
 
     socket.on("connect", onConnect);
@@ -127,6 +163,57 @@ export default function App() {
       socket.offAny(onAny);
     };
   }, [pushLog]);
+
+  useEffect(() => {
+    if (!isConnected || !roomId) return;
+
+    const prev = prevRoomIdRef.current;
+    if (prev && prev !== roomId) leaveRoom(prev);
+
+    joinRoom(roomId);
+  }, [roomId, isConnected]);
+
+  // Normalize various server message shapes to a single shape
+  const normalizeMessage = useCallback(
+    (m) => {
+      const id = m.id || m.message_id || m.uuid || undefined;
+      const text = m.text ?? "";
+      const senderId = m.sender_id ?? m.senderId ?? m.user_id ?? m.userId ?? "";
+      const room = m.room_id ?? m.roomId ?? roomId;
+      const createdAt =
+        m.created_at ??
+        m.createdAt ??
+        m.serverTime ??
+        m.server_time ??
+        Date.now();
+      const serverTimeMs =
+        typeof createdAt === "number" ? createdAt : Date.parse(createdAt);
+      return {
+        id,
+        text,
+        senderId,
+        room_id: String(room || ""),
+        created_at: createdAt,
+        serverTimeMs,
+      };
+    },
+    [roomId]
+  );
+
+  // Listen for message:new to update chat transcript
+  useEffect(() => {
+    const onNew = (msg) => {
+      pushLog("message:new", [msg]);
+      try {
+        const norm = normalizeMessage(msg);
+        setMessages((prev) => [...prev, norm]);
+      } catch {
+        /* empty */
+      }
+    };
+    socket.on("message:new", onNew);
+    return () => socket.off("message:new", onNew);
+  }, [pushLog, normalizeMessage]);
 
   useEffect(() => {
     try {
@@ -165,6 +252,14 @@ export default function App() {
     return { bg: "#fee2e2", fg: "#991b1b", br: "#fecaca" };
   }, [status]);
 
+  const roomIdShort = useMemo(() => {
+    try {
+      return String(roomId || "").slice(0, 8);
+    } catch {
+      return String(roomId || "");
+    }
+  }, [roomId]);
+
   return (
     <div
       style={{
@@ -174,6 +269,7 @@ export default function App() {
         fontFamily: "ui-sans-serif, system-ui, -apple-system",
         background: "#f8fafc",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
       }}
@@ -200,20 +296,28 @@ export default function App() {
           }}
         >
           <h1 style={{ margin: 0, fontSize: 20 }}>💬 Chat Sandbox</h1>
-          <span
+          <div
             style={{
               marginLeft: "auto",
-              padding: "4px 10px",
-              borderRadius: 999,
-              border: `1px solid ${statusColors.br}`,
-              background: statusColors.bg,
-              color: statusColors.fg,
-              fontSize: 13,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
             }}
-            title={status}
           >
-            {prettyStatus}
-          </span>
+            <span
+              style={{
+                padding: "4px 10px",
+                borderRadius: 999,
+                border: `1px solid ${statusColors.br}`,
+                background: statusColors.bg,
+                color: statusColors.fg,
+                fontSize: 13,
+              }}
+              title={status}
+            >
+              {prettyStatus}
+            </span>
+          </div>
         </header>
 
         {/* Send box */}
@@ -398,7 +502,7 @@ export default function App() {
           </code>
         </div>
 
-        {/* Live event console */}
+        {/* Chat transcript (replaces event console area) */}
         <div
           style={{
             marginTop: 12,
@@ -406,43 +510,113 @@ export default function App() {
             background: "#f9fafb",
             borderRadius: 10,
             padding: 8,
+            paddingTop: 28,
             height: 240,
             overflow: "auto",
             textAlign: "left",
+            position: "relative",
           }}
         >
-          {logs.length === 0 ? (
+          <span
+            style={{
+              position: "absolute",
+              top: 6,
+              right: 8,
+              padding: "2px 8px",
+              borderRadius: 999,
+              border: "1px solid #e5e7eb",
+              background: "#eef2ff",
+              color: "#111827",
+              fontSize: 12,
+              whiteSpace: "nowrap",
+            }}
+            title={`Room: ${roomId}`}
+          >
+            🧩 {roomIdShort}
+          </span>
+          {messages.length === 0 ? (
             <div style={{ color: "#6b7280", fontSize: 13 }}>
-              No events yet. Try sending a message.
+              No messages yet. Try sending one.
             </div>
           ) : (
-            logs.map((row, i) => (
-              <div key={i} style={{ marginBottom: 8 }}>
+            messages.map((m, i) => (
+              <div
+                key={`${m.id || m.serverTimeMs || i}-${i}`}
+                style={{ marginBottom: 8 }}
+              >
                 <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  {new Date(row.ts).toLocaleTimeString()} — {row.event}
+                  {new Date(m.serverTimeMs || Date.now()).toLocaleTimeString()}{" "}
+                  — {m.senderId === me?.external_id ? "You" : m.senderId}
                 </div>
-                <pre
-                  style={{
-                    margin: 0,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    fontSize: 12,
-                  }}
+                <div
+                  style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
                 >
-                  {row.data
-                    .map((d) => {
-                      try {
-                        return JSON.stringify(d, null, 2);
-                      } catch {
-                        return String(d);
-                      }
-                    })
-                    .join("\n")}
-                </pre>
+                  {m.text}
+                </div>
               </div>
             ))
           )}
         </div>
+      </div>
+
+      {/* Moved event console below card with a toggle */}
+      <div style={{ width: "min(92vw, 480px)", marginTop: 12 }}>
+        <button
+          onClick={() => setShowLog((v) => !v)}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 8,
+            border: "1px solid #d1d5db",
+          }}
+        >
+          {showLog ? "🙈 Hide Logs" : "🛠 Show Logs"}
+        </button>
+        {showLog && (
+          <div
+            style={{
+              marginTop: 8,
+              border: "1px solid #e5e7eb",
+              background: "#f9fafb",
+              borderRadius: 10,
+              padding: 8,
+              maxHeight: 260,
+              overflow: "auto",
+              textAlign: "left",
+            }}
+          >
+            {logs.length === 0 ? (
+              <div style={{ color: "#6b7280", fontSize: 13 }}>
+                No events yet.
+              </div>
+            ) : (
+              logs.map((row, i) => (
+                <div key={i} style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>
+                    {new Date(row.ts).toLocaleTimeString()} — {row.event}
+                  </div>
+                  <pre
+                    style={{
+                      margin: 0,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      fontSize: 12,
+                    }}
+                  >
+                    {row.data
+                      .map((d) => {
+                        try {
+                          return JSON.stringify(d, null, 2);
+                        } catch {
+                          return String(d);
+                        }
+                      })
+                      .join("\n")}
+                  </pre>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
