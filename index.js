@@ -42,8 +42,23 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("join:room", (roomId, ack) => {
+    socket.data.roomId = roomId;
+    ack({
+      ok: true,
+      roomId: roomId,
+    });
+  });
+
+  socket.on("leave:room", (roomId, ack) => {
+    socket.data.roomId = null;
+    ack({
+      ok: true,
+      roomId: roomId,
+    });
+  });
+
   socket.on("message:send", (message, ack) => {
-    console.log(socket.data);
     const senderId = socket.data.userId;
     if (!senderId) {
       ack({
