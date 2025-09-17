@@ -33,6 +33,38 @@ io.on("connection", (socket) => {
     console.log("socket disconnected:", socket.id);
   });
 
+  const reply = (ack, evt, payload, ok = true) => {
+    const res = { ok, event: evt, data: payload };
+    if (typeof ack === "function") ack(res);
+    else socket.emit(evt, res);
+  };
+
+  // JOIN ROOM
+  socket.on("join:room", ({ roomId } = {}, ack) => {
+    if (!roomId) {
+      return reply(ack, "join:room", { error: "Room ID is required" }, false);
+    }
+
+    if (socket.data.roomId) socket.leave(socket.data.roomId);
+
+    socket.data.roomId = roomId;
+    socket.join(roomId);
+
+    reply(ack, "join:room", { roomId: roomId });
+  });
+
+  // LEAVE ROOM
+  socket.on("leave:room", (roomId, ack) => {
+    const rid = roomId || socket.data.roomId;
+    if (!rid)
+      return reply(ack, "leave:room", { error: "Room ID is required" }, false);
+
+    socket.leave(rid);
+    socket.data.roomId = null;
+
+    reply(ack, "leave:room", { roomId: rid });
+  });
+
   socket.on("user:identify", (user, ack) => {
     socket.data.userId = user.id;
     ack({
@@ -42,43 +74,65 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("join:room", (roomId, ack) => {
-    socket.data.roomId = roomId;
-    ack({
-      ok: true,
-      roomId: roomId,
-    });
-  });
-
-  socket.on("leave:room", (roomId, ack) => {
-    socket.data.roomId = null;
-    ack({
-      ok: true,
-      roomId: roomId,
-    });
-  });
-
   socket.on("message:send", (message, ack) => {
-    const senderId = socket.data.userId;
-    if (!senderId) {
-      ack({
-        ok: false,
-        error: "User not identified",
-      });
-      return;
+    const { roomId, clientTempId, text } = message;
+    const rid = roomId || socket.data.roomId;
+
+    if (!rid)
+      return reply(
+        ack,
+        "message:send:ack",
+        { error: "Room ID is required" },
+        false
+      );
+
+    const userId = socket.data.userId;
+
+    if (!userId) {
+      return reply(
+        ack,
+        "message:send:ack",
+        { error: "User not identified" },
+        false
+      );
     }
 
-    ack({
-      ok: true,
-      message: {
-        id: crypto.randomUUID(),
-        roomId: message.roomId,
-        senderId: senderId,
-        clientTempId: message.clientTempId,
-        text: message.text,
-        createdAt: new Date(),
-      },
-    });
+    if (!socket.rooms.has(rid)) {
+      return reply(ack, "message:send:ack", { error: "Room not found" }, false);
+    }
+
+    if (!clientTempId) {
+      return reply(
+        ack,
+        "message:send:ack",
+        { error: "clientTempId is required" },
+        false
+      );
+    }
+
+    const body = typeof text === "string" ? text.trim() : "";
+
+    if (typeof text !== "string" || !text.trim() || text.length > 1000) {
+      return reply(
+        ack,
+        "message:send:ack",
+        { error: "VALIDATION_ERROR" },
+        false
+      );
+    }
+
+    const msg = {
+      id: crypto.randomUUID(),
+      roomId: rid,
+      senderId: userId,
+      clientTempId,
+      text: body,
+      createdAt: new Date().toISOString(),
+      serverTimeMs: Date.now(),
+    };
+
+    reply(ack, "message:send:ack", { message: msg }, true);
+    socket.to(rid).emit("message:new", msg);
   });
 });
 
