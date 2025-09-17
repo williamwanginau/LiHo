@@ -84,19 +84,15 @@ export default function App() {
       if (!trimmed || !socket.connected) return;
       const tempId = crypto?.randomUUID?.() || String(Date.now());
       const payload = {
-        text: trimmed,
-        clientId: me?.external_id,
-        tempId,
         clientTempId: tempId,
+        text: trimmed,
         roomId,
-        room_id: roomId,
-        client_temp_id: tempId,
       };
 
       pushLog("emit:message:send", [payload]);
       try {
         socket.emit("message:send", payload, (ack) => {
-          pushLog("ack:message:send", [ack]);
+          pushLog("message:send:ack", [ack]);
           try {
             if (ack && ack.ok && ack.message) {
               const norm = normalizeMessage(ack.message);
@@ -576,7 +572,8 @@ export default function App() {
             style={{
               marginTop: 8,
               border: "1px solid #e5e7eb",
-              background: "#f9fafb",
+              background: "#ffffff",
+              color: "#111827",
               borderRadius: 10,
               padding: 8,
               maxHeight: 260,
@@ -600,6 +597,7 @@ export default function App() {
                       whiteSpace: "pre-wrap",
                       wordBreak: "break-word",
                       fontSize: 12,
+                      color: "#111827",
                     }}
                   >
                     {row.data
