@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import "./App.css";
 import { io } from "socket.io-client";
 import users from "./users";
+import rooms from "./rooms";
 
 const WS_URL = import.meta.env.VITE_WS_URL || "http://localhost:3000";
 
@@ -10,6 +11,7 @@ const socket = io(WS_URL, { transports: ["websocket"], autoConnect: false });
 export default function App() {
   const [status, setStatus] = useState("connecting");
   const STORAGE_KEY = "chatUserExternalId";
+  const ROOM_STORAGE_KEY = "chatRoomId";
   const initialExternalId = useMemo(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -25,6 +27,19 @@ export default function App() {
     return String(users[0]?.external_id || "");
   }, []);
   const [userExternalId, setUserExternalId] = useState(initialExternalId);
+  const initialRoomId = useMemo(() => {
+    try {
+      const saved = localStorage.getItem(ROOM_STORAGE_KEY);
+      if (saved) {
+        const found = rooms.find((r) => String(r.id) === String(saved));
+        if (found) return String(found.id);
+      }
+    } catch {
+      /* empty */
+    }
+    return String(rooms[0]?.id || "");
+  }, []);
+  const [roomId, setRoomId] = useState(initialRoomId);
 
   // Minimal event console states
   const [text, setText] = useState("");
@@ -45,7 +60,13 @@ export default function App() {
       const trimmed = (body ?? text).trim();
       if (!trimmed || !socket.connected) return;
       const tempId = crypto?.randomUUID?.() || String(Date.now());
-      const payload = { text: trimmed, clientId: me?.external_id, tempId };
+
+      const payload = {
+        text: trimmed,
+        roomId: roomId,
+        clientTempId: tempId,
+      };
+
       pushLog("emit:message:send", [payload]);
       try {
         socket.emit("message:send", payload, (ack) => {
@@ -56,13 +77,31 @@ export default function App() {
       }
       setText("");
     },
-    [me?.external_id, pushLog, text]
+    [me?.external_id, roomId, pushLog, text]
   );
 
   useEffect(() => {
     if (!socket.connected) socket.connect();
 
-    const onConnect = () => setStatus(`connected (${socket.id})`);
+    const onConnect = () => {
+      socket.emit(
+        "user:identify",
+        {
+          id: me?.id,
+          externalId: userExternalId,
+          nickname: me?.name,
+        },
+        (res) => {
+          if (res?.ok) {
+            console.log("identify success", res.user);
+          } else {
+            console.error("identify failed", res?.error);
+          }
+        }
+      );
+
+      setStatus(`connected (${socket.id})`);
+    };
     const onDisconnect = () => setStatus("disconnected");
     const onError = (err) => {
       console.error("connect_error", err);
@@ -98,6 +137,16 @@ export default function App() {
       /* empty */
     }
   }, [userExternalId]);
+
+  useEffect(() => {
+    try {
+      if (roomId) {
+        localStorage.setItem(ROOM_STORAGE_KEY, String(roomId));
+      }
+    } catch {
+      /* empty */
+    }
+  }, [roomId]);
 
   const prettyStatus = useMemo(() => {
     if (status.startsWith("connected")) return `🟢 ${status}`;
@@ -206,6 +255,39 @@ export default function App() {
           <button onClick={() => setLogs([])} style={{ padding: "10px 12px" }}>
             🧹 Clear
           </button>
+        </div>
+
+        <div
+          style={{
+            marginBottom: 12,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            whiteSpace: "nowrap",
+            overflowX: "auto",
+          }}
+        >
+          <label htmlFor="roomSelect" style={{ fontWeight: 600 }}>
+            🧩 Room ID
+          </label>
+          <select
+            id="roomSelect"
+            value={roomId}
+            onChange={(e) => setRoomId(e.target.value)}
+            style={{
+              padding: 10,
+              borderRadius: 10,
+              border: "1px solid #d1d5db",
+              background: "#ffffff",
+              color: "#111827",
+            }}
+          >
+            {rooms.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.id}
+              </option>
+            ))}
+          </select>
         </div>
 
         <p
