@@ -1,0 +1,9 @@
+{
+  "name": "@liho/contracts",
+  "version": "0.1.0",
+  "private": false,
+  "main": "index.js",
+  "dependencies": {
+    "zod": "^3.23.8"
+  }
+}
