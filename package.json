@@ -1,0 +1,15 @@
+{
+  "name": "liho",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "setup": "npm --prefix api ci && npm --prefix web ci",
+    "dev": "concurrently -n api,web -c green,cyan \"npm --prefix api run dev\" \"npm --prefix web run dev\"",
+    "dev:api": "npm --prefix api run dev",
+    "dev:web": "npm --prefix web run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+
