@@ -1,0 +1,59 @@
+name: Backend CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - feature/**
+  pull_request:
+    branches:
+      - main
+      - develop
+      - feature/**
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          check-latest: true
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build
+        run: npm run -s build --if-present
+
+      - name: Smoke test
+        shell: bash
+        env:
+          PORT: 3000
+        run: |
+          set -euo pipefail
+          node index.js &
+          SERVER_PID=$!
+          trap "kill $SERVER_PID" EXIT
+
+          for i in {1..30}; do
+            if curl -fsS "http://localhost:${PORT}/health" >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl -fsS "http://localhost:${PORT}/health" | grep -E '"ok":[[:space:]]*true'
