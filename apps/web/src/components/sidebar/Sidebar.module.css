@@ -1,0 +1,22 @@
+.sidebar {
+  grid-area: sidebar;
+  position: relative;
+  height: 100%;
+  width: 100%;
+  background: #2d2e30;
+  border-inline-end: 1px solid #484848;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+.resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+}
+.resizer:hover {
+  background: rgba(0, 0, 0, 0.05);
+}

@@ -1,0 +1,21 @@
+.chats {
+  width: 100vw;
+  height: 100vh;
+  display: grid;
+  grid-template-columns: var(--rail-w) var(--sidebar-w) 1fr;
+  grid-template-rows: 1fr;
+  grid-template-areas: "navRail sidebar chat";
+  box-sizing: border-box
+}
+
+.chat {
+  grid-area: navRail;
+}
+
+.sidebar {
+  grid-area: sidebar;
+}
+
+.chat {
+  grid-area: chat;
+}
