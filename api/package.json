@@ -13,7 +13,7 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "socket.io": "^4.8.1",
-    "@liho/contracts": "workspace:*"
+    "@liho/contracts": "file:../packages/contracts"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

@@ -18,7 +18,7 @@
     "react-router-dom": "^7.9.1",
     "socket.io-client": "^4.8.1",
     "vite-plugin-svgr": "^4.5.0",
-    "@liho/contracts": "workspace:*"
+    "@liho/contracts": "file:../packages/contracts"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",

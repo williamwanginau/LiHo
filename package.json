@@ -2,14 +2,9 @@
   "name": "liho",
   "private": true,
   "version": "0.0.0",
-  "workspaces": [
-    "api",
-    "web",
-    "packages/*"
-  ],
   "scripts": {
     "setup": "npm --prefix packages/contracts install && npm --prefix api ci && npm --prefix web ci",
-    "dev": "concurrently -n api,web -c green,cyan \"npm --workspace api run dev\" \"npm --workspace web run dev\"",
+    "dev": "concurrently -n api,web -c green,cyan \"npm --prefix api run dev\" \"npm --prefix web run dev\"",
     "dev:api": "npm --prefix api run dev",
     "dev:web": "npm --prefix web run dev"
   },
