@@ -3,10 +3,10 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "setup": "npm --prefix packages/contracts install && npm --prefix api install && npm --prefix web install",
-    "dev": "concurrently -n api,web -c green,cyan \"npm --prefix api run dev\" \"npm --prefix web run dev\"",
-    "dev:api": "npm --prefix api run dev",
-    "dev:web": "npm --prefix web run dev"
+    "setup": "npm --prefix packages/contracts install && npm --prefix apps/api install && npm --prefix apps/web install",
+    "dev": "concurrently -n api,web -c green,cyan \"npm --prefix apps/api run dev\" \"npm --prefix apps/web run dev\"",
+    "dev:api": "npm --prefix apps/api run dev",
+    "dev:web": "npm --prefix apps/web run dev"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

@@ -4,12 +4,12 @@ on:
   push:
     branches: [ main, develop, 'feature/**' ]
     paths:
-      - 'api/**'
+      - 'apps/api/**'
       - '.github/workflows/api.yml'
   pull_request:
     branches: [ main, develop, 'feature/**' ]
     paths:
-      - 'api/**'
+      - 'apps/api/**'
       - '.github/workflows/api.yml'
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
       CI: true
     defaults:
       run:
-        working-directory: api
+        working-directory: apps/api
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +28,7 @@ jobs:
           node-version: 20
           check-latest: true
           cache: npm
-          cache-dependency-path: api/package-lock.json
+          cache-dependency-path: apps/api/package-lock.json
 
       - name: Install
         run: |
