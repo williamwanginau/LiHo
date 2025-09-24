@@ -1,23 +1,25 @@
-name: Backend CI
+name: API CI
 
 on:
   push:
-    branches:
-      - main
-      - develop
-      - feature/**
+    branches: [ main, develop, 'feature/**' ]
+    paths:
+      - 'api/**'
+      - '.github/workflows/api.yml'
   pull_request:
-    branches:
-      - main
-      - develop
-      - feature/**
+    branches: [ main, develop, 'feature/**' ]
+    paths:
+      - 'api/**'
+      - '.github/workflows/api.yml'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
       CI: true
-
+    defaults:
+      run:
+        working-directory: api
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +28,7 @@ jobs:
           node-version: 20
           check-latest: true
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: api/package-lock.json
 
       - name: Install
         run: |
@@ -45,7 +47,7 @@ jobs:
           PORT: 3000
         run: |
           set -euo pipefail
-          node index.js &
+          node index.js &> server.log &
           SERVER_PID=$!
           trap "kill $SERVER_PID" EXIT
 
