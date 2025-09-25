@@ -10,6 +10,8 @@ const crypto = require("crypto");
 const MAX_PER_ROOM = Number(process.env.MAX_PER_ROOM) || 1000;
 const messagesByRoom = new Map();
 const dedupe = new Map();
+const { createUsersRepo } = require("./repos/usersRepo");
+const usersRepo = createUsersRepo({ seed: true });
 
 const corsOptions = {
   origin: ALLOWED_ORIGINS,
@@ -23,6 +25,12 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 
 app.get("/", (req, res) => {
   res.send("Hello World");
+});
+
+// Simple users endpoint to simulate DB fetch
+app.get("/users", (req, res) => {
+  const users = createUsersRepo({ seed: true }).getUsers();
+  res.json({ ok: true, items: users });
 });
 
 // CORS for Socket.io
