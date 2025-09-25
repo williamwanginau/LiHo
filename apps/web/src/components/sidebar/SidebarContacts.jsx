@@ -1,4 +1,4 @@
-import { api, getErrorMessage } from "../../../lib/api";
+import { api, getErrorMessage } from "../../lib/api";
 import { useState, useEffect } from "react";
 
 const SidebarContacts = () => {

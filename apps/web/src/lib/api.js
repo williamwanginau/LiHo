@@ -15,3 +15,4 @@ export function getErrorMessage(error) {
     error.response?.data?.error || error.message || "An unknown error occurred"
   );
 }
+
