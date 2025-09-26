@@ -7,12 +7,17 @@ import Chats from "./Chats.jsx";
 import SidebarAdd from "./components/sidebar/SidebarAdd.jsx";
 import SidebarChats from "./components/sidebar/SidebarChats.jsx";
 import SidebarContacts from "./components/sidebar/SidebarContacts.jsx";
+import ChatsGate from "./ChatsGate.jsx";
 
 const router = createBrowserRouter([
   { path: "/", element: <App /> },
   {
     path: "/chats",
-    element: <Chats />,
+    element: (
+      <ChatsGate>
+        <Chats />
+      </ChatsGate>
+    ),
     children: [
       { path: "/chats/add", element: <SidebarAdd /> },
       { path: "/chats/chats", element: <SidebarChats /> },

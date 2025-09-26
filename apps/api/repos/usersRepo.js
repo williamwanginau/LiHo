@@ -1,25 +1,23 @@
-const crypto = require("crypto");
-
 const nowIso = () => new Date().toISOString();
 
 function seedUsers() {
   return [
     {
-      id: crypto.randomUUID(),
+      id: "1234567890",
       externalId: "1234567890",
       nickname: "Alice",
       createdAt: nowIso(),
       lastSeenAt: nowIso(),
     },
     {
-      id: crypto.randomUUID(),
+      id: "9876543210",
       externalId: "1234567891",
       nickname: "Bob",
       createdAt: nowIso(),
       lastSeenAt: nowIso(),
     },
     {
-      id: crypto.randomUUID(),
+      id: "4567890123",
       externalId: "1234567892",
       nickname: "Charlie",
       createdAt: nowIso(),

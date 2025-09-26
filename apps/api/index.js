@@ -11,6 +11,7 @@ const MAX_PER_ROOM = Number(process.env.MAX_PER_ROOM) || 1000;
 const messagesByRoom = new Map();
 const dedupe = new Map();
 const { createUsersRepo } = require("./repos/usersRepo");
+const { createRoomsRepo } = require("./repos/roomsRepo");
 const usersRepo = createUsersRepo({ seed: true });
 
 const corsOptions = {
@@ -31,6 +32,16 @@ app.get("/", (req, res) => {
 app.get("/users", (req, res) => {
   const users = createUsersRepo({ seed: true }).getUsers();
   res.json({ ok: true, items: users });
+});
+
+app.get("/me", (req, res) => {
+  const { externalId } = req.query;
+  const user = createUsersRepo({ seed: true }).getUserByExternalId(externalId);
+  res.json({ ok: true, item: user });
+});
+app.get("/rooms", (req, res) => {
+  const rooms = createRoomsRepo({ seed: true }).getRooms();
+  res.json({ ok: true, items: rooms });
 });
 
 // CORS for Socket.io
