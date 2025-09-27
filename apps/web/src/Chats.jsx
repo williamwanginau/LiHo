@@ -14,10 +14,10 @@ const Chats = () => {
   const MAX = 680;
   const STORAGE_KEY = "chatUserExternalId";
   const navigate = useNavigate();
-  const [me, setMe] = useState(null);
-  const [isConnected, setIsConnected] = useState(socket.connected);
-  const [sid, setSid] = useState(null);
-  const [rooms, setRooms] = useState([]);
+  const [_me, setMe] = useState(null);
+  const [_isConnected, setIsConnected] = useState(socket.connected);
+  const [_sid, setSid] = useState(null);
+  const [_rooms, setRooms] = useState([]);
 
   useEffect(() => {
     async function getMe() {
