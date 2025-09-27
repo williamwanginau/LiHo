@@ -7,6 +7,7 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || "http://localhost:5173";
 const cors = require("cors");
 const { createUsersRepo } = require("./repos/usersRepo");
 const { createRoomsRepo } = require("./repos/roomsRepo");
+const { createFriendsRepo } = require("./repos/friendsRepo");
 const { initSocket } = require("./socket");
 const MAX_PER_ROOM = Number(process.env.MAX_PER_ROOM) || 1000;
 const messagesByRoom = new Map();
@@ -40,6 +41,14 @@ app.get("/me", (req, res) => {
 app.get("/rooms", (req, res) => {
   const rooms = createRoomsRepo({ seed: true }).getRooms();
   res.json({ ok: true, items: rooms });
+});
+
+app.get("/friends", (req, res) => {
+  const { externalId } = req.query;
+  const friends = createFriendsRepo({ seed: true }).listFriendsByExternalId(
+    externalId
+  );
+  res.json({ ok: true, items: friends });
 });
 
 initSocket(server, {

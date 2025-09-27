@@ -5,7 +5,7 @@ const corsOptions = {
   credentials: true,
 };
 
-function initSocket(server) {
+function initSocket(server, { messagesByRoom, dedupe, maxPerRoom }) {
   const io = new Server(server, {
     cors: corsOptions,
     transports: ["websocket"],
@@ -42,7 +42,7 @@ function initSocket(server) {
       messagesByRoom.set(rid, []);
     }
     const list = messagesByRoom.get(rid);
-    if (list.length >= MAX_PER_ROOM) {
+    if (list.length >= maxPerRoom) {
       list.shift();
     }
 
